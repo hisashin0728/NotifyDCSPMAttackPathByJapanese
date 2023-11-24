@@ -8,4 +8,4 @@ Defender CSPM の攻撃パスを Azure OpenAI を用いて日本語で通知す�
 
 # デプロイ方法
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)]([https://github.com/hisashin0728/SentinelAzureOpenAI/assets/55295601/a84df34e-1649-4c3c-9cd7-77a73543bc8d](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhisashin0728%2FNotifyDCSPMAttackPathByJapanese%2Fmain%2Ftemplate.json)https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhisashin0728%2FNotifyDCSPMAttackPathByJapanese%2Fmain%2Ftemplate.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhisashin0728%2FNotifyDCSPMAttackPathByJapanese%2Fmain%2Ftemplate.json)
