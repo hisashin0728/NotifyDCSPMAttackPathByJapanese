@@ -4,7 +4,8 @@ Defender CSPM の攻撃パスを Azure OpenAI を用いて日本語で通知す�
 # 通知イメージ
 - O365 コネクタを用いてメール送信します。
 - テンプレートは [Global で提供されたテンプレート](https://github.com/Azure/Microsoft-Defender-for-Cloud/tree/main/Workflow%20automation/Notify-NewAttackPath)を Azure Open AI を用いるロジックにカスタマイズしています。
-<img width="313" alt="image" src="https://github.com/hisashin0728/NotifyDCSPMAttackPathByJapanese/assets/55295601/651b0432-ed14-47ae-b6dd-99ce041c10c5">
+
+![image](https://github.com/hisashin0728/NotifyDCSPMAttackPathByJapanese/assets/55295601/6388a7e8-655e-4701-9607-8468058a5461)
 
 # 事前準備
 Defender CSPM で検知される攻撃パスを補完するための専用 Azure Storage、およびテーブル名 ``AttachPaths`` を作成して下さい。
