@@ -17,7 +17,8 @@ Defender CSPM で検知される攻撃パスを補完するための専用 Azure
 # デプロイ方法
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fhisashin0728%2FNotifyDCSPMAttackPathByJapanese%2Fmain%2Ftemplate.json)
-Deploy 時に必要なパラメータを設定してください。
+
+- Deploy 時に必要なパラメータを設定してください。
 ![image](https://github.com/hisashin0728/NotifyDCSPMAttackPathByJapanese/assets/55295601/0169e796-c991-4b00-a7ad-ed95e5c59147)
 
 # デプロイ後の設定
