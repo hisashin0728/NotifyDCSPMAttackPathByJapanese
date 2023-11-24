@@ -1,0 +1,671 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "PlaybookName":  {
+            "defaultValue":  "attackPathNotification",
+            "type": "string"
+        },
+        "EmailAddress": {
+            "type": "string",
+            "metadata": {
+                "description": "The email address to send notifications to."
+            }
+        },
+        "AzureOpenAIDomain": {
+            "type": "string",
+            "metadata": {
+                "description": "Azure OpenAI Domain Name (e.g. 'xxx.openai.azure.com')"
+            }
+        },
+        "AzureOpenAIDeployName": {
+            "type": "string",
+            "metadata": {
+                "description": "Azure OpenAI Deploy Name (e.g. 'gpt-35-turbo-16k')"
+            }
+        }
+    },
+    "variables": {
+        "AzuretablesConnectionName":  "[concat('Azuretables-', parameters('PlaybookName'))]",
+        "Office365ConnectionName":  "[concat('Office365-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "attackPathNotification",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Hour",
+                                "interval": 1
+                            },
+                            "evaluatedRecurrence": {
+                                "frequency": "Hour",
+                                "interval": 1
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "For_each_Attack_Path": {
+                            "foreach": "@variables('attack_path_array')",
+                            "actions": {
+                                "Condition": {
+                                    "actions": {
+                                        "Merge_Entity_(V2)_2": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "LastUpdate": "@{formatDateTime(utcNow(), 'yyyy-MM-ddTHH:mm:ssZ')}"
+                                                },
+                                                "headers": {
+                                                    "If-Match": "*"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuretables']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "patch",
+                                                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/tables/@{encodeURIComponent('attackPaths')}/entities/etag(PartitionKey='@{encodeURIComponent('AttackPath')}',RowKey='@{encodeURIComponent(items('For_each_Attack_Path')[0])}')"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Get_entity_(V2)": [
+                                            "Succeeded",
+                                            "Failed",
+                                            "Skipped"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "AOAI-Descrption": {
+                                                "runAfter": {
+                                                    "Insert_Entity_(V2)": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "Http",
+                                                "inputs": {
+                                                    "authentication": {
+                                                        "audience": "https://cognitiveservices.azure.com",
+                                                        "type": "ManagedServiceIdentity"
+                                                    },
+                                                    "body": {
+                                                        "frequency_penalty": 2,
+                                                        "max_tokens": 1000,
+                                                        "messages": [
+                                                            {
+                                                                "content": "You are a Security Analyst.",
+                                                                "role": "system"
+                                                            },
+                                                            {
+                                                                "content": "Please translate Japanese.",
+                                                                "role": "user"
+                                                            },
+                                                            {
+                                                                "content": "@{items('For_each_Attack_Path')[2]}",
+                                                                "role": "assistant"
+                                                            }
+                                                        ],
+                                                        "stop": null,
+                                                        "temperature": 0
+                                                    },
+                                                    "headers": {
+                                                        "Content-Type": "application/json"
+                                                    },
+                                                    "method": "POST",
+                                                    "uri": "[concat('https://', parameters('AzureOpenAIDomain'), '/openai/deployments/', parameters('AzureOpenAIDeployName'), '/chat/completions?api-version=2023-05-15')]"
+                                                }
+                                            },
+                                            "AOAI-Effect": {
+                                                "runAfter": {
+                                                    "Insert_Entity_(V2)": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "Http",
+                                                "inputs": {
+                                                    "authentication": {
+                                                        "audience": "https://cognitiveservices.azure.com",
+                                                        "type": "ManagedServiceIdentity"
+                                                    },
+                                                    "body": {
+                                                        "frequency_penalty": 2,
+                                                        "max_tokens": 1000,
+                                                        "messages": [
+                                                            {
+                                                                "content": "You are a Security Analyst.",
+                                                                "role": "system"
+                                                            },
+                                                            {
+                                                                "content": "Please translate Japanese.",
+                                                                "role": "user"
+                                                            },
+                                                            {
+                                                                "content": "@{items('For_each_Attack_Path')[5]}",
+                                                                "role": "assistant"
+                                                            }
+                                                        ],
+                                                        "stop": null,
+                                                        "temperature": 0
+                                                    },
+                                                    "headers": {
+                                                        "Content-Type": "application/json"
+                                                    },
+                                                    "method": "POST",
+                                                    "uri": "[concat('https://', parameters('AzureOpenAIDomain'), '/openai/deployments/', parameters('AzureOpenAIDeployName'), '/chat/completions?api-version=2023-05-15')]"
+                                                }
+                                            },
+                                            "AOAI-RemediationStep": {
+                                                "runAfter": {
+                                                    "Insert_Entity_(V2)": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "Http",
+                                                "inputs": {
+                                                    "authentication": {
+                                                        "audience": "https://cognitiveservices.azure.com",
+                                                        "type": "ManagedServiceIdentity"
+                                                    },
+                                                    "body": {
+                                                        "frequency_penalty": 2,
+                                                        "max_tokens": 1000,
+                                                        "messages": [
+                                                            {
+                                                                "content": "You are a Security Analyst.",
+                                                                "role": "system"
+                                                            },
+                                                            {
+                                                                "content": "Please translate Japanese.",
+                                                                "role": "user"
+                                                            },
+                                                            {
+                                                                "content": "@{items('For_each_Attack_Path')[4]}",
+                                                                "role": "assistant"
+                                                            }
+                                                        ],
+                                                        "stop": null,
+                                                        "temperature": 0
+                                                    },
+                                                    "headers": {
+                                                        "Content-Type": "application/json"
+                                                    },
+                                                    "method": "POST",
+                                                    "uri": "[concat('https://', parameters('AzureOpenAIDomain'), '/openai/deployments/', parameters('AzureOpenAIDeployName'), '/chat/completions?api-version=2023-05-15')]"
+                                                }
+                                            },
+                                            "Insert_Entity_(V2)": {
+                                                "runAfter": {},
+                                                "type": "ApiConnection",
+                                                "inputs": {
+                                                    "body": {
+                                                        "DisplayName": "@{items('For_each_Attack_Path')[1]}",
+                                                        "LastUpdate": "@{formatDateTime(utcNow(), 'yyyy-MM-ddTHH:mm:ssZ')}",
+                                                        "Notified": "False",
+                                                        "PartitionKey": "AttackPath",
+                                                        "RowKey": "@{items('For_each_Attack_Path')[0]}",
+                                                        "TimeGenerated": "@{formatDateTime(utcNow(), 'yyyy-MM-ddTHH:mm:ssZ')}"
+                                                    },
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['azuretables']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "post",
+                                                    "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/tables/@{encodeURIComponent('attackPaths')}/entities"
+                                                }
+                                            },
+                                            "JSON-Description": {
+                                                "runAfter": {
+                                                    "AOAI-Descrption": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "ParseJson",
+                                                "inputs": {
+                                                    "content": "@body('AOAI-Descrption')",
+                                                    "schema": {
+                                                        "properties": {
+                                                            "choices": {
+                                                                "items": {
+                                                                    "properties": {
+                                                                        "finish_reason": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "index": {
+                                                                            "type": "integer"
+                                                                        },
+                                                                        "message": {
+                                                                            "properties": {
+                                                                                "content": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "role": {
+                                                                                    "type": "string"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        }
+                                                                    },
+                                                                    "required": [
+                                                                        "index",
+                                                                        "finish_reason",
+                                                                        "message"
+                                                                    ],
+                                                                    "type": "object"
+                                                                },
+                                                                "type": "array"
+                                                            },
+                                                            "created": {
+                                                                "type": "integer"
+                                                            },
+                                                            "id": {
+                                                                "type": "string"
+                                                            },
+                                                            "model": {
+                                                                "type": "string"
+                                                            },
+                                                            "object": {
+                                                                "type": "string"
+                                                            },
+                                                            "usage": {
+                                                                "properties": {
+                                                                    "completion_tokens": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "prompt_tokens": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "total_tokens": {
+                                                                        "type": "integer"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    }
+                                                }
+                                            },
+                                            "JSON-Effect": {
+                                                "runAfter": {
+                                                    "AOAI-Effect": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "ParseJson",
+                                                "inputs": {
+                                                    "content": "@body('AOAI-Effect')",
+                                                    "schema": {
+                                                        "properties": {
+                                                            "choices": {
+                                                                "items": {
+                                                                    "properties": {
+                                                                        "finish_reason": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "index": {
+                                                                            "type": "integer"
+                                                                        },
+                                                                        "message": {
+                                                                            "properties": {
+                                                                                "content": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "role": {
+                                                                                    "type": "string"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        }
+                                                                    },
+                                                                    "required": [
+                                                                        "index",
+                                                                        "finish_reason",
+                                                                        "message"
+                                                                    ],
+                                                                    "type": "object"
+                                                                },
+                                                                "type": "array"
+                                                            },
+                                                            "created": {
+                                                                "type": "integer"
+                                                            },
+                                                            "id": {
+                                                                "type": "string"
+                                                            },
+                                                            "model": {
+                                                                "type": "string"
+                                                            },
+                                                            "object": {
+                                                                "type": "string"
+                                                            },
+                                                            "usage": {
+                                                                "properties": {
+                                                                    "completion_tokens": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "prompt_tokens": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "total_tokens": {
+                                                                        "type": "integer"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    }
+                                                }
+                                            },
+                                            "JSON-RemediationStep": {
+                                                "runAfter": {
+                                                    "AOAI-RemediationStep": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "ParseJson",
+                                                "inputs": {
+                                                    "content": "@body('AOAI-RemediationStep')",
+                                                    "schema": {
+                                                        "properties": {
+                                                            "choices": {
+                                                                "items": {
+                                                                    "properties": {
+                                                                        "finish_reason": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "index": {
+                                                                            "type": "integer"
+                                                                        },
+                                                                        "message": {
+                                                                            "properties": {
+                                                                                "content": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "role": {
+                                                                                    "type": "string"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        }
+                                                                    },
+                                                                    "required": [
+                                                                        "index",
+                                                                        "finish_reason",
+                                                                        "message"
+                                                                    ],
+                                                                    "type": "object"
+                                                                },
+                                                                "type": "array"
+                                                            },
+                                                            "created": {
+                                                                "type": "integer"
+                                                            },
+                                                            "id": {
+                                                                "type": "string"
+                                                            },
+                                                            "model": {
+                                                                "type": "string"
+                                                            },
+                                                            "object": {
+                                                                "type": "string"
+                                                            },
+                                                            "usage": {
+                                                                "properties": {
+                                                                    "completion_tokens": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "prompt_tokens": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "total_tokens": {
+                                                                        "type": "integer"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    }
+                                                }
+                                            },
+                                            "Merge_Entity_(V2)": {
+                                                "runAfter": {
+                                                    "Send_an_email_(V2)": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "ApiConnection",
+                                                "inputs": {
+                                                    "body": {
+                                                        "Notified": "True"
+                                                    },
+                                                    "headers": {
+                                                        "If-Match": "*"
+                                                    },
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['azuretables']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "patch",
+                                                    "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/tables/@{encodeURIComponent('attackPaths')}/entities/etag(PartitionKey='@{encodeURIComponent('AttackPath')}',RowKey='@{encodeURIComponent(items('For_each_Attack_Path')[0])}')"
+                                                }
+                                            },
+                                            "Send_an_email_(V2)": {
+                                                "runAfter": {
+                                                    "Set_variable_-_Notification_Body": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "ApiConnection",
+                                                "inputs": {
+                                                    "body": {
+                                                        "Body": "<p><br>\n@{variables('notificationBody')}<br>\n<br>\n</p>",
+                                                        "Importance": "Normal",
+                                                        "Subject": "New Attack Path",
+                                                        "To": "[parameters('EmailAddress')]"
+                                                    },
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['office365']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "post",
+                                                    "path": "/v2/Mail"
+                                                }
+                                            },
+                                            "Set_variable_-_Notification_Body": {
+                                                "runAfter": {
+                                                    "JSON-Description": [
+                                                        "Succeeded"
+                                                    ],
+                                                    "JSON-Effect": [
+                                                        "Succeeded"
+                                                    ],
+                                                    "JSON-RemediationStep": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "notificationBody",
+                                                    "value": "<style type=\"text/css\">\n\th1 {\n\t\tfont-family: \"メイリオ\", \"Meiryo\";\n\t\tfont-size: 32px;\n\t\tfont-style: normal;\n\t\tfont-variant: normal;\n\t\tfont-weight: 700;\n\t\tline-height: 30px;\n\t}\n\n\th2 {\n\t\tfont-family: \"メイリオ\", \"Meiryo\";\n\t\tfont-size: 20px;\n\t\tfont-style: normal;\n\t\tfont-variant: normal;\n\t\tfont-weight: 700;\n\t\tline-height: 15px;\n\t}\n\n\th3 {\n\t\tfont-family: \"メイリオ\", \"Meiryo\";\n\t\tfont-size: 22px;\n\t\tfont-style: normal;\n\t\tfont-variant: normal;\n\t\tfont-weight: 700;\n\t\tline-height: 23.1px;\n\t}\n\n\tp {\n\t\tfont-family: \"メイリオ\", \"Meiryo\";\n\t\tfont-size: 16px;\n\t\tfont-style: normal;\n\t\tfont-variant: normal;\n\t\tfont-weight: 400;\n\t\tline-height: 20px;\n\t}\n</style>\n<table align=\"center\" border=\"0\" cellpadding=\"1\" cellspacing=\"1\" style=\"width:800px;\">\n\t<tbody>\n\t\t<tr>\n\t\t\t<th style=\"text-align:center; width:735px\">\n\t\t\t\t<table align=\"left\" border=\"0\" cellpadding=\"0\" cellspacing=\"0\" style=\"width: 650px;\">\n\t\t\t\t\t<tbody>\n\t\t\t\t\t\t<tr>\n\t\t\t\t\t\t\t<td><img src=\"https://raw.githubusercontent.com/Azure/Azure-Security-Center/master/.github/images/asc.png\" alt=\"\" width=\"100\" height=\"100\" /></td>\n\t\t\t\t\t\t\t<td>\n\t\t\t\t\t\t\t\t<h1 style=\"text-align: left;\">Microsoft Defender for Cloud</h1>\n\t\t\t\t\t\t\t</td>\n\t\t\t\t\t\t</tr>\n\t\t\t\t\t</tbody>\n\t\t\t\t</table>\n\t\t\t</th>\n\t\t</tr>\n\t\t<tr>\n\t\t\t<td style=\"width:735px\">\n\t\t\t\t<p style=\"text-align: left;\"> <br><h3>Defender for Cloud が新たな攻撃パスを検知しました</h3>\n\t\t\t</td>\n\t\t</tr>\n\n<tr><td>&nbsp;</td></tr>\n\t\t<tr>\n\t\t\t<td style=\"width: 735px; border-color: rgb(221, 221, 221); border-bottom-style: solid;\">\n\t\t\t\t<h2>攻撃パス情報</h2>\n\t\t\t</td>\n\t\t</tr>\n\t\t<tr>\n\t\t\t<td style=\"width:735px\">\n\t\t\t\t<table align=\"center\" border=\"0\" cellpadding=\"0\" cellspacing=\"0\" style=\"width: 750px;\">\n\t\t\t\t\t<tbody><br>\n\t\t\t\t\t\t<tr>\n\t\t\t\t\t\t\t<td style=\"width: 200px;\">\n\t\t\t\t\t\t\t\t<p><strong>攻撃パス ID</strong></p>\n                                <p>@{items('For_each_Attack_Path')[0]}</p> \n\t\t\t\t\t\t\t</td>\n\t\t\t\t\t\t<tr>\n\t\t\t\t\t\t\t<td style=\"width: 200px;\">\n\t\t\t\t\t\t\t\t<br><p><strong>攻撃パス名</strong></p>\n                                <p>@{items('For_each_Attack_Path')[1]}</p> \n\t\t\t\t\t\t\t</td>\n\t\t\t\t\t\t</tr>\n                        <tr>\n\t\t\t\t\t\t\t<td style=\"width: 200px;\">\n\t\t\t\t\t\t\t\t<br><p><strong>概要</strong></p>\n                                <p>@{body('JSON-Description')?['choices'][0]['message']['content']}</p> \n\t\t\t\t\t\t\t</td>\n\t\t\t\t\t\t</tr>\n                        <tr>\n\t\t\t\t\t\t\t<td style=\"width: 200px;\">\n\t\t\t\t\t\t\t\t<br><p><strong>修復ステップ</strong></p>\n                                <p>@{body('JSON-RemediationStep')?['choices'][0]['message']['content']}</p> \n\t\t\t\t\t\t\t</td>\n\t\t\t\t\t\t</tr>\n                        <tr>\n\t\t\t\t\t\t\t<td style=\"width: 200px;\">\n\t\t\t\t\t\t\t\t<br><p><strong>想定される影響度</strong></p>\n                                <p>@{body('JSON-Effect')?['choices'][0]['message']['content']}</p> \n\t\t\t\t\t\t\t</td>\n\t\t\t\t\t\t</tr>\n\t\t\t<tr>\n\t\t\t\t\t\t\t<td style=\"width: 1200px;\">\n\t\t\t\t\t\t\t\t<br><p>Click <a href=\"@{concat('https://portal.azure.com/#view/Microsoft_Azure_Security_Orion/AttackPathTypeBlade/attackPathTypeId/', items('For_each_Attack_Path')[3])}\">here</a> to open the Attack Path&rsquo;s details page in Microsoft Defender for Cloud</p>\n\t\t\t\t\t\t\t</td>\n\t\t\t\t\t\t</tr>\n\t\t\t\t\t\t\n\t\t\t\t\t</tbody>\n\t\t\t\t</table>\n\t\t\t</td>\n\t\t</tr>\n<tr><td>&nbsp;</td></tr>\n\n\t</tbody>\n</table>"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@body('Get_entity_(V2)')?['RowKey']",
+                                                    "@items('For_each_Attack_Path')[0]"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Get_entity_(V2)": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuretables']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/tables/@{encodeURIComponent('attackPaths')}/entities(PartitionKey='@{encodeURIComponent('AttackPath')}',RowKey='@{encodeURIComponent(items('For_each_Attack_Path')[0])}')"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Set_variable_-_Attack_Path_-_Array": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "HTTP-AttackPaths": {
+                            "runAfter": {
+                                "Initialize_-_Attack_Path_-_Array": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "type": "ManagedServiceIdentity"
+                                },
+                                "body": {
+                                    "query": "securityresources | where type == 'microsoft.security/attackpaths'| project name, display=tostring(properties.displayName), description=tostring(properties.description), aptype=tostring(properties.attackPathType),Remediation=tostring(properties.manualRemediationSteps),Impact=tostring(properties.potentialImpact)"
+                                },
+                                "method": "POST",
+                                "uri": "https://management.azure.com/providers/Microsoft.ResourceGraph/resources?api-version=2020-04-01-preview"
+                            }
+                        },
+                        "Initialize_-_Attack_Path_-_Array": {
+                            "runAfter": {
+                                "Initialize_-_Notification_Body": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "attack_path_array",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_-_Notification_Body": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "notificationBody",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Set_variable_-_Attack_Path_-_Array": {
+                            "runAfter": {
+                                "HTTP-AttackPaths": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "attack_path_array",
+                                "value": "@body('HTTP-AttackPaths')?['data']?['rows']"
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuretables":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('AzuretablesConnectionName'))]",
+                                "connectionName":  "[variables('AzuretablesConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuretables')]"
+                            },
+                            "office365":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]",
+                                "connectionName":  "[variables('Office365ConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Office365')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "dependsOn":  [
+                "[resourceId('Microsoft.Web/connections', variables('AzuretablesConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]"
+            ]
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('AzuretablesConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('AzuretablesConnectionName')]",
+                "customParameterValues":  {
+                },
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuretables')]"
+                }
+            }
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('Office365ConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('Office365ConnectionName')]",
+                "customParameterValues":  {
+                },
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Office365')]"
+                }
+            }
+        }
+    ]
+}
